@@ -128,10 +128,10 @@ def preprocess_data_decloud_8bit_tf(img_data):
         tfs.ToTensor()
     ])(img_data)[None,::]
     haze = haze*2-1
-    return haze.numpy()
+    return haze
 
 def postprocess_data_decloud_8bit_tf(img_numpy):
-    img_tif = (torch.squeeze(img_numpy.clamp(-1,1)).cpu().numpy()+1)/2
+    img_tif = (torch.squeeze(img_numpy.clamp(-1,1)).cpu().detach().numpy()+1)/2
     img_tif=np.clip(img_tif*255,0,255).astype(np.uint8)
     return img_tif
 
@@ -152,39 +152,14 @@ def main():
     img_list = os.listdir(img_path)
     imgs_len=len(img_list)
     
-     #读取图像
     for idx in range(imgs_len):
-        #读取图像
         cloud_image=read_img(os.path.join(img_path, img_list[idx]))#.astype(np.float32)             
-        block_size=448
-        batch_size = 4 
         image_for_dec = cloud_image.transpose(1,2,0)  # chw to hwc
-        del cloud_image
-
         image_for_dec= preprocess_data_decloud_8bit_tf(image_for_dec)  
-        # 分块处理输入图像
-        image_for_dec = np.squeeze(image_for_dec,0)
-        patchs_list, img_shape=img2patch(image_for_dec, block_size) 
-        del image_for_dec
-        patchs_len=len(patchs_list)
-        
-        output_list=[]
-        for i in range(0, patchs_len, batch_size):
-            if i>=patchs_len:break
-            input=patchs_list[i:i+batch_size]
-            input=torch.tensor(np.array(input).astype(np.float32))
-            with torch.no_grad():
-                output = net(input.cuda())
-            for j in range(output.shape[0]):
-                output_arr=postprocess_data_decloud_8bit_tf(output[j])
-                output_list.append(output_arr)
-        del patchs_list
-        img_decloud = patch2img(output_list, img_shape, block_size)
-        del output_list
-        img_decloud=img_decloud.astype(np.uint8).transpose(1,2,0)
-        
-        write_img_8n16(img_decloud.transpose(2,0,1), os.path.join(save_path, img_list[idx]))
-        del img_decloud
+        output = net(image_for_dec.cuda())
+        output_arr=postprocess_data_decloud_8bit_tf(output)    
+        img_decloud=output_arr.astype(np.uint8)
+        write_img_8n16(img_decloud, os.path.join(save_path, img_list[idx]))
 
 
 if __name__ == "__main__":
