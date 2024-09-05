@@ -122,40 +122,6 @@ def patch2img(patch_list,img_shape,patch_size):
     result=result[:,:img_shape[1],:img_shape[2]]
     return result
 
-def preprocess_data_decloud(img_data, satelliteID, sensor):
-    satellite = satelliteID[2:4]
-    idx = satellite + sensor
-    img_data_max = img_data.max()
-    max_dic = {'16IRS': 13000, '16MSS': 2047, '16CCD': 2047, 
-            '19IRS': 14000, '19MSS': 4095, '19CCD': 8000}
-    if img_data_max > max_dic[idx]:
-        img_data = np.clip(img_data, 0, img_data_max)/img_data_max
-    else:
-        img_data = np.clip(img_data, 0, max_dic[idx])/max_dic[idx]
-    img_data = torch.tensor(img_data)
-
-    if img_data.shape[0] == 1:
-        img_data = tfs.Normalize(mean=[0.3], std=[0.30])(img_data)
-    else: 
-        img_data = tfs.Normalize(mean=[0.35, 0.31, 0.3, 0.3], 
-                             std=[0.28, 0.30, 0.304, 0.30])(img_data)
-    return img_data.numpy(), img_data_max
-
-def preprocess_data_decloud_8bit(img_data):
-    # img_data = Image.fromarray(img_data)
-    haze= tfs.Compose([
-        tfs.ToTensor(),
-        tfs.Normalize(mean=[0.64, 0.6, 0.58],std=[0.14,0.15, 0.152])
-    ])(img_data)[None,::]
-    return haze.numpy()
-
-def preprocess_data_decloud_8bit_DEA(img_data):
-    # img_data = Image.fromarray(img_data)
-    haze= tfs.Compose([
-        tfs.ToTensor()
-    ])(img_data)[None,::]
-    return haze.numpy()
-
 def preprocess_data_decloud_8bit_tf(img_data):
     
     haze= tfs.Compose([
@@ -163,31 +129,6 @@ def preprocess_data_decloud_8bit_tf(img_data):
     ])(img_data)[None,::]
     haze = haze*2-1
     return haze.numpy()
-
-def postprocess_data_decloud(img_numpy, satelliteID, sensor, img_max):
-    satellite = satelliteID[2:4]
-    idx = satellite + sensor
-    max_dic = {'16IRS': 13000, '16MSS': 2047, '16CCD': 2047, 
-            '19IRS': 14000, '19MSS': 4095, '19CCD': 5000}
-    # img_numpy = img_data.cpu().numpy()
-    if img_numpy.shape[0] == 1:
-        img_numpy[0,:,:] = img_numpy[0,:,:]*0.30+0.30
-    else:
-        img_numpy[0,:,:] = img_numpy[0,:,:]*0.28+0.31
-        img_numpy[1,:,:] = img_numpy[1,:,:]*0.30+0.31
-        img_numpy[2,:,:] = img_numpy[2,:,:]*0.304+0.3
-        img_numpy[3,:,:] = img_numpy[3,:,:]*0.30+0.3
-    if img_max > max_dic[idx]:
-        img_numpy = np.clip(img_numpy * img_max, 0, 65535)
-    else:
-        img_numpy = np.clip(img_numpy * max_dic[idx], 0, 65535)
-    img_tif=img_numpy.astype(np.uint16)
-    return img_tif
-
-def postprocess_data_decloud_8bit(img_numpy):
-    img_tif=torch.squeeze(img_numpy.clamp(0,1).cpu())
-    img_tif = img_tif.mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-    return img_tif
 
 def postprocess_data_decloud_8bit_tf(img_numpy):
     img_tif = (torch.squeeze(img_numpy.clamp(-1,1)).cpu().numpy()+1)/2
@@ -199,7 +140,7 @@ def postprocess_data_decloud_8bit_tf(img_numpy):
 def main():
     img_path = '/home/server4/lmk/database/decloud_large/test6/'
     save_path = '/home/server4/lmk/database/decloud_large/result6/out_decloudformer_test/'
-    model_path= '/home/server4/lmk/Decloudformer/decloudformer-b-42-newLoss.pth'
+    model_path= '/home/server4/lmk/Decloudformer/decloudformer-b.pth'
     net=torch.load(model_path)
     device='cuda' if torch.cuda.is_available() else 'cpu'
     net=net.to(device)
